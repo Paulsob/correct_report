@@ -22,7 +22,7 @@ last_worked_day = {}
 
 # Загрузка данных
 def load_data():
-    with open("10_drivers_october.json", "r", encoding="utf-8") as f:
+    with open("../data/10_drivers_october.json", "r", encoding="utf-8") as f:
         drivers_raw = json.load(f)
 
     year = drivers_raw.get("year", 2026)
@@ -41,7 +41,7 @@ def load_data():
             "pattern": pattern_dict
         })
 
-    with open("schedule.json", "r", encoding="utf-8") as f:
+    with open("../data/schedule.json", "r", encoding="utf-8") as f:
         schedules_raw = json.load(f)
 
     target_schedule = schedules_raw[0]
@@ -99,7 +99,7 @@ def select_best_driver():
 
 if __name__ == "__main__":
 
-
+    print()
 # if __name__ == "__main__":
 #     if not os.path.exists("10_drivers_october.json") or not os.path.exists("schedule.json"):
 #         print("ОШИБКА: Рядом со скриптом должны лежать файлы 10_drivers_october.json и schedule.json")
