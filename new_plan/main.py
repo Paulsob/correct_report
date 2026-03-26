@@ -1,62 +1,58 @@
-import os
-from kernel.new_scheduler import solve_schedule
-from kernel.new_generate_summary_report import generate_excel_report
+import time
+from pathlib import Path
 
-# ==========================================
-# НАСТРОЙКИ РЕЖИМА МОДЕЛИРОВАНИЯ
-# ==========================================
-# 1 = Строгий режим (Отдых >= 2 * Работа)
-# 2 = Смягченный режим (Отдых >= 2 * Работа ИЛИ минимум 12 часов)
-REST_MODE = 2
-# ==========================================
+from prepare_data.data_loader import load_schedule_data, load_transport_schedule
+from kernel.new_scheduler import run_simulation
+from kernel.new_generate_summary_report import generate_excel_reports
 
-# Настройка путей для сохранения отчетов
-REPORTS_CONFIG = {
-    1: {
-        "folder": "full_relax",
-        "label": "Строгий"
-    },
-    2: {
-        "folder": "12hours_relax",
-        "label": "Смягченный"
-    }
-}
+BASE_DIR = Path(__file__).resolve().parent
+REPORTS_DIR = BASE_DIR / "reports"
+RAW_RESULTS_DIR = REPORTS_DIR / "raw_results"
+
+
+def save_raw_json(result_obj, filename: str):
+    RAW_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    filepath = RAW_RESULTS_DIR / filename
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(result_obj.model_dump_json(indent=4))
+    print(f"Сырой лог сохранен в: {filepath}")
+
+
+def main():
+    print("Запуск системы планирования")
+    start_time = time.time()
+
+    print("\n[1/3] Загрузка данных")
+    try:
+        drivers_data = load_schedule_data("10_drivers_october.json")
+        transport_data = load_transport_schedule("schedule.json")
+    except Exception as e:
+        print(f"Ошибка при загрузке данных. Программа остановлена.")
+        return
+
+    print("\n[2/3] Распределение смен")
+    result = run_simulation(drivers_data, transport_data)
+
+    print("\n[3/3] Сохранение результатов")
+    save_raw_json(result, f"simulation_result_{result.month.lower()}.json")
+
+    # Заглушка для будущего генератора Excel
+    generate_excel_reports(result, REPORTS_DIR / "excel_reports")
+
+    execution_time = round(time.time() - start_time, 2)
+    print("ИТОГИ РАСПРЕДЕЛЕНИЯ:")
+    print(f"Период:             {result.month} {result.year}")
+    print(f"Всего смен:         {len(result.shifts_log)}")
+    print(f"Закрыто водителями: {len(result.shifts_log) - result.uncovered_shifts_count}")
+
+    if result.uncovered_shifts_count > 0:
+        print(f"НЕ ЗАКРЫТО: {result.uncovered_shifts_count} смен!")
+    else:
+        print(f"ВСЕ СМЕНЫ ЗАКРЫТЫ ИДЕАЛЬНО!")
+
+    print(f"Время расчета:    {execution_time} сек.")
+
 
 if __name__ == "__main__":
-    # 1. Определяем папку для сохранения
-    config = REPORTS_CONFIG.get(REST_MODE, REPORTS_CONFIG[2])
-    reports_folder = config["folder"]
-
-    # 2. Создаем полный путь: new_plan/reports/{folder}/
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-    save_path = os.path.join(base_dir, "reports", reports_folder)
-
-    # 3. Создаем папку, если её нет
-    os.makedirs(save_path, exist_ok=True)
-
-    print(f"\n{'=' * 50}")
-    print(f"РЕЖИМ: {config['label']} (REST_MODE = {REST_MODE})")
-    print(f"ПУТЬ СОХРАНЕНИЯ: {save_path}")
-    print(f"{'=' * 50}\n")
-
-    # 4. Запуск логики решения
-    result = solve_schedule(rest_mode=REST_MODE)
-
-    # 5. Генерация отчета, если решение найдено
-    if result and result.get("success"):
-        report_name = (
-            f"Расписание_{result['month_name'].capitalize()}_"
-            f"{result['year']}_Режим{REST_MODE}.xlsx"
-        )
-        full_path = os.path.join(save_path, report_name)
-
-        generate_excel_report(
-            assigned_shifts=result["assigned_shifts"],
-            all_shifts=result["all_shifts"],
-            covered_shift_ids=result["covered_shift_ids"],
-            drivers_dict=result["drivers_dict"],
-            max_days=result["max_days"],
-            filename=full_path  # Передаем полный путь
-        )
-    else:
-        print("\nПроцесс завершен с ошибкой. Отчет не создан.")
+    main()

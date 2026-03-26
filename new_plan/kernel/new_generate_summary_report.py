@@ -1,129 +1,63 @@
-import os
-import openpyxl
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
+import pandas as pd
+from pathlib import Path
+from prepare_data.models import SimulationResult
 
 
-def generate_excel_report(assigned_shifts, all_shifts, covered_shift_ids, drivers_dict, max_days,
-                          filename="Отчет_Расписание.xlsx"):
-    # Создаем папку, если путь содержит директорию
-    save_dir = os.path.dirname(filename)
-    if save_dir:
-        os.makedirs(save_dir, exist_ok=True)
+def generate_excel_reports(result: SimulationResult, output_dir: Path):
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = output_dir / f"Расписание_{result.month}_{result.year}.xlsx"
+    summary_data = []
+    for d in result.drivers_log:
+        row = {
+            "Таб. №": d.tab_number,
+            "Итого часов": d.total_hours_worked,
+            "Итого смен": d.total_shifts_worked
+        }
+        for day in range(1, 32):
+            row[str(day)] = d.daily_status.get(day, "")
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Расписание"
+        summary_data.append(row)
 
-    # --- СТИЛИ ---
-    bold_font = Font(bold=True)
-    center_aligned = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin_border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'),
-                         bottom=Side(style='thin'))
+    df_summary = pd.DataFrame(summary_data)
 
-    header_fill = PatternFill(start_color="DDEBF7", end_color="DDEBF7", fill_type="solid")
-    green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")  # Успешная смена
-    yellow_fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")  # Резерв
-    gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")  # Выходной
-    red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")  # Незакрытая смена
+    schedule_data = []
+    audit_data = []
 
-    # --- ЗАГОЛОВКИ ---
-    headers = ["Таб. №", "Смен", "Часов"] + [str(d) for d in range(1, max_days + 1)]
-    ws.append(headers)
+    for s in result.shifts_log:
+        driver = s.assigned_driver_tab if s.assigned_driver_tab else "НЕ НАЗНАЧЕН"
 
-    for cell in ws[1]:
-        cell.font = bold_font
-        cell.alignment = center_aligned
-        cell.fill = header_fill
-        cell.border = thin_border
+        schedule_data.append({
+            "Дата": s.date,
+            "Маршрут": s.route,
+            "Трамвай": s.tram_number,
+            "Смена": s.shift_num,
+            "Отправление": s.start_time.strftime("%H:%M"),
+            "Прибытие": s.end_time.strftime("%H:%M"),
+            "Длительность (ч)": round(s.duration_hours, 2),
+            "Водитель (Таб. №)": driver
+        })
 
-    # --- ЗАПОЛНЕНИЕ ВОДИТЕЛЕЙ ---
-    # Сортируем водителей по количеству часов (по убыванию)
-    drivers_sorted = sorted(assigned_shifts.items(), key=lambda item: sum(s.duration for s in item[1]), reverse=True)
+        rest_val = round(s.rest_before_shift_hours, 1) if s.rest_before_shift_hours else "Первая смена"
+        available_val = s.available_from_next.strftime("%d.%m %H:%M") if s.available_from_next else ""
 
-    for d_id, shifts_list in drivers_sorted:
-        if not shifts_list:
-            continue  # Пропускаем водителей, которых алгоритм вообще не вызвал в этом месяце
+        audit_data.append({
+            "Дата": s.date,
+            "Водитель": driver,
+            "Код смены": f"М{s.route}-Т{s.tram_number}-С{s.shift_num}",
+            "Начало работы": s.start_time.strftime("%d.%m %H:%M"),
+            "Конец работы": s.end_time.strftime("%d.%m %H:%M"),
+            "Отдых ДО смены (ч)": rest_val,
+            "Снова доступен с": available_val if driver != "НЕ НАЗНАЧЕН" else ""
+        })
 
-        shifts_list.sort(key=lambda s: s.start_dt)
-        total_shifts = len(shifts_list)
-        total_hours = sum(s.duration for s in shifts_list)
+    df_schedule = pd.DataFrame(schedule_data)
+    df_audit = pd.DataFrame(audit_data)
 
-        row_cells = [d_id, total_shifts, round(total_hours, 1)]
-        ws.append(row_cells)
-        current_row = ws.max_row
+    print(f"Формирование Excel файла: {filename.name}")
 
-        for col_idx in range(1, 4):
-            ws.cell(row=current_row, column=col_idx).alignment = center_aligned
-            ws.cell(row=current_row, column=col_idx).border = thin_border
+    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+        df_summary.to_excel(writer, sheet_name="Сводный_отчет", index=False)
+        df_schedule.to_excel(writer, sheet_name="Книга_расписания", index=False)
+        df_audit.to_excel(writer, sheet_name="Аудит_отдыха", index=False)
 
-        shifts_by_day = {s.day: s for s in shifts_list}
-        driver_pattern = drivers_dict[d_id]["pattern"]
-
-        # Заполняем дни
-        for day in range(1, max_days + 1):
-            col_idx = day + 3
-            cell = ws.cell(row=current_row, column=col_idx)
-            cell.alignment = center_aligned
-            cell.border = thin_border
-
-            pattern_val = driver_pattern.get(day, "В")
-
-            if day in shifts_by_day:
-                # ВОДИТЕЛЬ РАБОТАЕТ (ЗЕЛЕНЫЙ)
-                current_shift = shifts_by_day[day]
-                idx = shifts_list.index(current_shift)
-                rest_str = "---"
-                if idx > 0:
-                    prev_shift = shifts_list[idx - 1]
-                    rest_hours = (current_shift.start_dt - prev_shift.end_dt).total_seconds() / 3600.0
-                    rest_str = f"{round(rest_hours, 1)}ч"
-
-                cell.value = f"Р ({round(current_shift.duration, 1)}ч)\n[Отд: {rest_str}]"
-                cell.fill = green_fill
-            else:
-                if pattern_val in ["1", "2"]:
-                    # ДОЛЖЕН БЫЛ РАБОТАТЬ, НО НЕ ПОЛУЧИЛ СМЕНУ (ЖЕЛТЫЙ - РЕЗЕРВ)
-                    cell.value = "Резерв"
-                    cell.fill = yellow_fill
-                else:
-                    # ЗАКОННЫЙ ВЫХОДНОЙ (СЕРЫЙ)
-                    cell.value = "В (Вых)"
-                    cell.fill = gray_fill
-                    cell.font = Font(color="808080")
-
-    # --- ИНФОРМАЦИЯ О НЕЗАКРЫТЫХ СМЕНАХ (ПОДВАЛ) ---
-    uncovered_by_day = {day: [] for day in range(1, max_days + 1)}
-    for s in all_shifts:
-        if s.id not in covered_shift_ids:
-            uncovered_by_day[s.day].append(f"См.{s.type_str} (Тр.{s.tram_num})")
-
-    ws.append([])  # Пустая строка для отступа
-    bottom_row_idx = ws.max_row + 1
-    ws.cell(row=bottom_row_idx, column=1).value = "НЕЗАКРЫТЫЕ СМЕНЫ:"
-    ws.cell(row=bottom_row_idx, column=1).font = bold_font
-
-    for day in range(1, max_days + 1):
-        cell = ws.cell(row=bottom_row_idx, column=day + 3)
-        cell.alignment = center_aligned
-        cell.border = thin_border
-        uncovered = uncovered_by_day[day]
-
-        if uncovered:
-            cell.value = "\n".join(uncovered)
-            cell.fill = red_fill
-            cell.font = Font(color="9C0006", bold=True)
-        else:
-            cell.value = "ОК"
-            cell.font = Font(color="006100")
-            cell.fill = green_fill
-
-    # --- ШИРИНА КОЛОНОК ---
-    ws.column_dimensions['A'].width = 10
-    ws.column_dimensions['B'].width = 8
-    ws.column_dimensions['C'].width = 8
-    for col in range(4, max_days + 4):
-        ws.column_dimensions[get_column_letter(col)].width = 15
-
-    wb.save(filename)
-    print(f"Готово! Отчет сохранен: {filename}.")
+    print(f"Готово! Файл сохранен в: {filename}")
