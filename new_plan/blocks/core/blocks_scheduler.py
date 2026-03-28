@@ -3,22 +3,20 @@ import os
 from datetime import date
 import calendar
 
-# --- НАСТРОЙКА ПУТЕЙ ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_DIR = os.path.dirname(BASE_DIR)  # Поднимаемся в корень проекта
+PROJECT_DIR = os.path.dirname(BASE_DIR)
 
 INPUT_DIR = os.path.join(PROJECT_DIR, "input_data")
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "output_data")
 
-# Входящие файлы
+# input_data
 SCHEDULE_INPUT = os.path.join(INPUT_DIR, "schedule_prepared.json")
 DRIVERS_INPUT = os.path.join(INPUT_DIR, "10_drivers_october_prepared.json")
 MATRIX_INPUT = os.path.join(INPUT_DIR, "matrix.json")
 
-# Исходящий файл
+# output_data
 RESULT_OUTPUT = os.path.join(OUTPUT_DIR, "final_schedule_october.json")
 
-# Создаем папку output_data, если её вдруг нет (чтобы не было ошибки FileNotFoundError)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ANCHOR_DATE = 1
@@ -115,9 +113,9 @@ def generate_schedule():
                 block_id = tram.get("block_id")
 
                 shifts = []
-                if "смена_1" in tram:
+                if tram.get("смена_1"):
                     shifts.append(("Утро", tram["смена_1"]))
-                if "смена_2" in tram:
+                if tram.get("смена_2"):
                     shifts.append(("Вечер", tram["смена_2"]))
 
                 for shift_name, shift_data in shifts:
