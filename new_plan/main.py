@@ -25,7 +25,7 @@ def main():
 
     print("\n[1/3] Загрузка данных")
     try:
-        drivers_data = load_schedule_data("10_drivers_october.json")
+        drivers_data = load_schedule_data("4x2_10_drivers_october.json")
         transport_data = load_transport_schedule("schedule.json")
     except Exception as e:
         print(f"Ошибка при загрузке данных. Программа остановлена.")

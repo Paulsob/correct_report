@@ -2,143 +2,167 @@ import json
 import os
 
 # --- НАСТРОЙКИ ПУТЕЙ ---
-# Текущая папка: new_plan/blocks/formatting_data
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Поднимаемся на уровень выше: new_plan/blocks
 PROJECT_DIR = os.path.dirname(BASE_DIR)
-# Папка с данными: new_plan/blocks/input_data
 INPUT_DIR = os.path.join(PROJECT_DIR, "input_data")
 
-# Файлы расписания
-SCHEDULE_INPUT = os.path.join(INPUT_DIR, "raw_schedule.json")
-SCHEDULE_OUTPUT = os.path.join(INPUT_DIR, "schedule_prepared.json")
+TARGET_YEAR = "2026"
+TARGET_MONTH = "10"
 
-# Файлы водителей (предполагаем, что они тоже лежат в input_data)
-DRIVERS_INPUT = os.path.join(INPUT_DIR, "10_drivers_october.json")
-DRIVERS_OUTPUT = os.path.join(INPUT_DIR, "10_drivers_october_prepared.json")
+RAW_DIR = os.path.join(INPUT_DIR, "raw_data", TARGET_YEAR, TARGET_MONTH)
+RAW_DIR_SCHEDULE = os.path.join(INPUT_DIR, "raw_data")
+PREP_DIR = os.path.join(INPUT_DIR, "prepared_data", TARGET_YEAR, TARGET_MONTH)
+PREP_DIR_SCHEDULE = os.path.join(INPUT_DIR, "prepared_data")
 
-# --- ЭТАЛОННЫЕ ПАТТЕРНЫ НА ПЕРВЫЕ 12 ДНЕЙ ---
-MATRIX_PATTERNS = {
-    1: ["1", "1", "1", "1", "В", "В", "2", "2", "2", "2", "В", "В"],
-    2: ["2", "2", "2", "2", "В", "В", "1", "1", "1", "1", "В", "В"],
-    3: ["В", "1", "1", "1", "1", "В", "В", "2", "2", "2", "2", "В"],
-    4: ["В", "2", "2", "2", "2", "В", "В", "1", "1", "1", "1", "В"],
-    5: ["В", "В", "1", "1", "1", "1", "В", "В", "2", "2", "2", "2"],
-    6: ["В", "В", "2", "2", "2", "2", "В", "В", "1", "1", "1", "1"],
-    7: ["1", "В", "В", "2", "2", "2", "2", "В", "В", "1", "1", "1"],
-    8: ["2", "В", "В", "1", "1", "1", "1", "В", "В", "2", "2", "2"],
-    9: ["1", "1", "В", "В", "2", "2", "2", "2", "В", "В", "1", "1"],
-    10: ["2", "2", "В", "В", "1", "1", "1", "1", "В", "В", "2", "2"],
-    11: ["1", "1", "1", "В", "В", "2", "2", "2", "2", "В", "В", "1"],
-    12: ["2", "2", "2", "В", "В", "1", "1", "1", "1", "В", "В", "2"]
-}
+os.makedirs(PREP_DIR, exist_ok=True)
+
+MATRICES_FILE = os.path.join(INPUT_DIR, "matrices.json")
+SCHEDULE_INPUT = os.path.join(RAW_DIR_SCHEDULE, "raw_schedule.json")
+SCHEDULE_OUTPUT = os.path.join(PREP_DIR_SCHEDULE, "schedule_prepared.json")
+DRIVERS_OUTPUT = os.path.join(PREP_DIR, "drivers_prepared.json")
 
 
-def detect_role(driver_days):
-    """Определяет роль водителя по первым 12 дням его графика."""
-    first_12_days = driver_days[:12]
-    pattern = [str(day.get("value")) for day in first_12_days]
+def load_matrices():
+    with open(MATRICES_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-    for role_id, target_pattern in MATRIX_PATTERNS.items():
-        if pattern == target_pattern:
-            return role_id
+
+def detect_role(days_data, matrix_data):
+    cycle_len = matrix_data["cycle_length"]
+    pattern = []
+
+    if isinstance(days_data, list):
+        days_dict = {str(item["day"]): str(item["value"]) for item in days_data}
+    else:
+        days_dict = days_data
+
+    for day_num in range(1, cycle_len + 1):
+        val = days_dict.get(str(day_num), "В")
+        pattern.append(str(val).strip().upper())
+
+    for role_id, target_pattern in matrix_data["matrix"].items():
+        normalized_target = []
+        for val in target_pattern:
+            if str(val) in ["В", "B", "В ", " B"]:
+                normalized_target.append("В")
+            else:
+                normalized_target.append("1" if int(val) % 2 != 0 else "2")
+
+        if pattern == normalized_target:
+            return int(role_id)
     return None
 
 
-def process_schedule():
-    print("⏳ Обработка расписания трамваев (Создание СКВОЗНЫХ блоков)...")
+def get_trams_per_block(matrix_data):
+    max_slot = 0
+    for pattern in matrix_data["matrix"].values():
+        for val in pattern:
+            if isinstance(val, int) and val > max_slot:
+                max_slot = val
+    return max_slot // 2
+
+
+def process_drivers(matrices):
+    print("⏳ Обработка водителей...")
+    all_prepared_drivers = []
+
+    for sched_type, matrix_data in matrices.items():
+        filename = None
+        for f in os.listdir(RAW_DIR):
+            if f.startswith(sched_type) and "drivers" in f.lower():
+                filename = os.path.join(RAW_DIR, f)
+                break
+
+        if not filename:
+            continue
+
+        with open(filename, "r", encoding="utf-8") as f:
+            drivers_data = json.load(f)
+
+        drivers_list = drivers_data.get("drivers", [])
+        block_size = matrix_data["block_size"]
+        blocks_created = 0
+
+        for i in range(0, len(drivers_list), block_size):
+            chunk = drivers_list[i:i + block_size]
+            blocks_created += 1
+
+            for d in chunk:
+                d["block_id"] = blocks_created
+                d["schedule_type"] = sched_type
+                d.pop("schedule", None)
+
+                if isinstance(d.get("days"), list):
+                    d["days"] = {str(item["day"]): str(item["value"]) for item in d["days"]}
+
+                role = detect_role(d["days"], matrix_data)
+                d["matrix_role"] = role if role is not None else 99
+
+            chunk.sort(key=lambda x: x.get("matrix_role", 99))
+            all_prepared_drivers.extend(chunk)
+
+        print(f"     {sched_type}: собрано {blocks_created} блоков водителей.")
+
+    final_json = {
+        "month": TARGET_MONTH,
+        "year": int(TARGET_YEAR),
+        "drivers": all_prepared_drivers
+    }
+
+    with open(DRIVERS_OUTPUT, "w", encoding="utf-8") as f:
+        json.dump(final_json, f, ensure_ascii=False, indent=2)
+
+
+def process_schedule(matrices):
+    print("\nОбработка расписания (Универсальная разметка для всех графиков)...")
     with open(SCHEDULE_INPUT, "r", encoding="utf-8") as f:
         schedule_data = json.load(f)
 
-    # Создаем пулы трамваев по типам дней
-    # В Python объекты передаются по ссылке. Изменяя словарь tram здесь,
-    # мы изменим его и в исходном schedule_data
-    trams_pool = {
-        "рабочий": [],
-        "выходной": []
-    }
+    trams_pool = {"рабочий": [], "выходной": []}
 
-    # 1. Собираем все трамваи со всех маршрутов в общие пулы
     for route in schedule_data:
         day_type = route.get("день", "рабочий")
-        # Добавляем все трамваи этого маршрута в соответствующий пул
         trams_pool[day_type].extend(route.get("трамваи", []))
 
-    # 2. Назначаем сквозные блоки
     for day_type, trams in trams_pool.items():
-        global_block_id = 1
 
-        # Берем по 4 трамвая из общего котла
-        for i in range(0, len(trams), 4):
-            tram_chunk = trams[i:i + 4]
+        # Для КАЖДОГО типа графика параллельно размечаем всю сеть
+        for sched_type, matrix_data in matrices.items():
+            trams_per_block = get_trams_per_block(matrix_data)
+            block_id = 1
 
-            for index, tram in enumerate(tram_chunk):
-                tram["block_id"] = global_block_id
-                slot_base = index * 2
+            for i in range(0, len(trams), trams_per_block):
+                chunk = trams[i:i + trams_per_block]
 
-                if tram.get("смена_1"):
-                    tram["смена_1"]["matrix_slot"] = slot_base + 1
-                if tram.get("смена_2"):
-                    tram["смена_2"]["matrix_slot"] = slot_base + 2
+                for index, tram in enumerate(chunk):
+                    # Создаем словари для мультиязычности графиков
+                    if "block_ids" not in tram:
+                        tram["block_ids"] = {}
 
-            # Переходим к следующему блоку
-            global_block_id += 1
+                    tram["block_ids"][sched_type] = block_id
+                    slot_base = index * 2
 
-    # 3. Сохраняем результат
+                    if tram.get("смена_1"):
+                        if "matrix_slots" not in tram["смена_1"]:
+                            tram["смена_1"]["matrix_slots"] = {}
+                        tram["смена_1"]["matrix_slots"][sched_type] = slot_base + 1
+
+                    if tram.get("смена_2"):
+                        if "matrix_slots" not in tram["смена_2"]:
+                            tram["смена_2"]["matrix_slots"] = {}
+                        tram["смена_2"]["matrix_slots"][sched_type] = slot_base + 2
+
+                block_id += 1
+
     with open(SCHEDULE_OUTPUT, "w", encoding="utf-8") as f:
         json.dump(schedule_data, f, ensure_ascii=False, indent=2)
 
-    print(f"✅ Расписание готово! Сформировано сквозных блоков: {global_block_id - 1}.")
-
-
-def process_drivers():
-    print("⏳ Обработка водителей (Умное распознавание ролей)...")
-    with open(DRIVERS_INPUT, "r", encoding="utf-8") as f:
-        drivers_data = json.load(f)
-
-    drivers_list = drivers_data.get("drivers", [])
-    unrecognized_count = 0
-
-    # 1. Распознаем роли
-    for driver in drivers_list:
-        role = detect_role(driver.get("days", []))
-        if role:
-            driver["matrix_role"] = role
-        else:
-            driver["matrix_role"] = 99
-            unrecognized_count += 1
-            print(f"⚠️ Внимание: Водитель Таб.№{driver.get('tab_number')} имеет нестандартный график.")
-
-    # 2. Разбиваем на блоки по 12 человек
-    final_drivers_list = []
-    for i in range(0, len(drivers_list), 12):
-        chunk = drivers_list[i:i + 12]
-        block_id = (i // 12) + 1
-
-        for d in chunk:
-            d["block_id"] = block_id
-
-        # Сортируем внутри блока по ролям (от 1 до 12)
-        chunk.sort(key=lambda x: x.get("matrix_role", 99))
-        final_drivers_list.extend(chunk)
-
-    drivers_data["drivers"] = final_drivers_list
-
-    with open(DRIVERS_OUTPUT, "w", encoding="utf-8") as f:
-        json.dump(drivers_data, f, ensure_ascii=False, indent=2)
-
-    print(f"✅ Водители сохранены. Обработано {len(drivers_list)} чел.")
-    if unrecognized_count > 0:
-        print(f"❌ Не удалось определить роль у {unrecognized_count} водителей.")
+    print("Расписание готово! Трамваи готовы к любому типу графика.")
 
 
 if __name__ == "__main__":
-    print("🚀 Старт подготовки данных...\n")
-    if not os.path.exists(SCHEDULE_INPUT):
-        print(f"❌ Ошибка: Файл расписания не найден по пути: {SCHEDULE_INPUT}")
-    elif not os.path.exists(DRIVERS_INPUT):
-        print(f"❌ Ошибка: Файл водителей не найден по пути: {DRIVERS_INPUT}")
-    else:
-        process_schedule()
-        process_drivers()
-        print("\n🎉 Подготовка данных идеально завершена!")
+    print("Старт подготовки данных")
+    matrices = load_matrices()
+    process_drivers(matrices)
+    process_schedule(matrices)
+    print("\nГотово")

@@ -7,7 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
 
-def load_schedule_data(filename: str = "10_drivers_october.json") -> ScheduleData:
+def load_schedule_data(filename: str = "4x2_10_drivers_october.json") -> ScheduleData:
     filepath = DATA_DIR / filename
 
     if not filepath.exists():

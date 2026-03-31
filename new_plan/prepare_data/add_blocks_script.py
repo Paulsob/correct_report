@@ -6,7 +6,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "..", "data")
 
 SCHEDULE_INPUT = os.path.join(DATA_DIR, "schedule.json")
-DRIVERS_INPUT = os.path.join(DATA_DIR, "10_drivers_october.json")
+DRIVERS_INPUT = os.path.join(DATA_DIR, "4x2_10_drivers_october.json")
 
 SCHEDULE_OUTPUT = os.path.join(DATA_DIR, "schedule_prepared.json")
 DRIVERS_OUTPUT = os.path.join(DATA_DIR, "10_drivers_october_prepared.json")

@@ -36,7 +36,7 @@ def solve_schedule(rest_mode):
     """
     # Пути к данным (относительно расположения скрипта)
     base_path = os.path.dirname(os.path.abspath(__file__))
-    drivers_path = os.path.join(base_path, "../data/10_drivers_october.json")
+    drivers_path = os.path.join(base_path, "../data/4x2_10_drivers_october.json")
     schedule_path = os.path.join(base_path, "../data/schedule.json")
 
     if not os.path.exists(drivers_path) or not os.path.exists(schedule_path):

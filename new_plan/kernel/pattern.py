@@ -101,8 +101,8 @@ if __name__ == "__main__":
 
     print()
 # if __name__ == "__main__":
-#     if not os.path.exists("10_drivers_october.json") or not os.path.exists("schedule.json"):
-#         print("ОШИБКА: Рядом со скриптом должны лежать файлы 10_drivers_october.json и schedule.json")
+#     if not os.path.exists("4x2_10_drivers_october.json") or not os.path.exists("schedule.json"):
+#         print("ОШИБКА: Рядом со скриптом должны лежать файлы 4x2_10_drivers_october.json и schedule.json")
 #     else:
 #
 #         auto_generate_report(final_schedule, drivers_list, output_excel="Расписание_Октябрь_Оптимизировано.xlsx")
