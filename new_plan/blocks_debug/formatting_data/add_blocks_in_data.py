@@ -17,8 +17,8 @@ PREP_DIR_SCHEDULE = os.path.join(INPUT_DIR, "prepared_data")
 os.makedirs(PREP_DIR, exist_ok=True)
 
 MATRICES_FILE = os.path.join(INPUT_DIR, "matrices.json")
-SCHEDULE_INPUT = os.path.join(RAW_DIR_SCHEDULE, "new_raw_schedule.json")
-SCHEDULE_OUTPUT = os.path.join(PREP_DIR_SCHEDULE, "new_schedule_prepared.json")
+SCHEDULE_INPUT = os.path.join(RAW_DIR_SCHEDULE, "raw_schedule.json")
+SCHEDULE_OUTPUT = os.path.join(PREP_DIR_SCHEDULE, "schedule_prepared.json")
 DRIVERS_OUTPUT = os.path.join(PREP_DIR, "drivers_prepared.json")
 
 

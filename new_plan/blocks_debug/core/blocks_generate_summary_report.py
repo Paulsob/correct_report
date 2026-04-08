@@ -2,7 +2,7 @@ import sys
 import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from blocks import config
+from blocks_debug import config
 
 import json
 import pandas as pd
@@ -12,9 +12,11 @@ from openpyxl.utils import get_column_letter
 
 RU_DAYS = {0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"}
 
-TARGET_SCHEDULES = ["4x2", "5x2h"]
+# --- НАСТРОЙКИ ОТЧЕТА ---
+TARGET_SCHEDULES = ["4x2"]
 
 
+# TARGET_SCHEDULES = ["4x2"] # <-- для старого моно-режима
 
 def calculate_hours(time_range_str):
     try:
@@ -43,8 +45,8 @@ def generate_excel():
     blocks_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     output_dir = os.path.join(blocks_dir, "output_data", str(YEAR), f"{MONTH:02d}")
 
-    json_filename = f"{prefix}_BLOCK_final_schedule.json"
-    excel_filename = f"{prefix}_BLOCK_drivers_report.xlsx"
+    json_filename = f"{prefix}_final_schedule.json"
+    excel_filename = f"{prefix}_drivers_report.xlsx"
 
     schedule_path = os.path.join(output_dir, json_filename)
     report_path = os.path.join(output_dir, excel_filename)
