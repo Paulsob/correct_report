@@ -22,12 +22,12 @@ os.makedirs(MONTH_OUT_DIR, exist_ok=True)
 
 
 MATRICES_FILE = os.path.join(INPUT_DIR, "matrices.json")
-SCHEDULE_RAW = os.path.join(RAW_DIR_SCHEDULE, "raw_schedule.json")
+SCHEDULE_RAW = os.path.join(RAW_DIR_SCHEDULE, "new_raw_schedule.json")
 
 
-SCHEDULE_PREPARED = os.path.join(PREP_DIR_SCHEDULE, "schedule_prepared.json")
+SCHEDULE_PREPARED = os.path.join(PREP_DIR_SCHEDULE, "new_schedule_prepared.json")
 DRIVERS_PREPARED = os.path.join(PREP_DIR, "drivers_prepared.json")
 
 
-FINAL_SCHEDULE = os.path.join(MONTH_OUT_DIR, f"{TARGET_SCHEDULE}_final_schedule.json")
-REPORT_EXCEL = os.path.join(MONTH_OUT_DIR, f"{TARGET_SCHEDULE}_drivers_report.xlsx")
+FINAL_SCHEDULE = os.path.join(MONTH_OUT_DIR, f"NEW_{TARGET_SCHEDULE}_final_schedule.json")
+REPORT_EXCEL = os.path.join(MONTH_OUT_DIR, f"NEW_{TARGET_SCHEDULE}_drivers_report.xlsx")

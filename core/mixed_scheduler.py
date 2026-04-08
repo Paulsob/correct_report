@@ -3,7 +3,7 @@ import os
 
 # Подключаем конфиг
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from blocks import config
+import config
 
 import json
 from datetime import date
